@@ -1,0 +1,23 @@
+config {
+  type: "table",
+  schema: "marts",
+  description: "Top 100 taxi IDs by total tips earned in the 90 days.",
+  columns: {
+    taxi_id: "Unique id",
+    total_tips: "Total tips earned in the 90 days window",
+    total_fare: "Total fare earned in the 90 days window exclude tips",
+    trip_count: "Total trips completed in the 90 days window",
+    avg_tip_per_trip: "total_tips / trip_count"
+  }
+}
+
+SELECT
+  taxi_id,
+  ROUND(SUM(tips), 2) AS total_tips,
+  ROUND(SUM(fare), 2) AS total_fare,
+  COUNT(*) AS trip_count,
+  ROUND(SUM(tips) / COUNT(*), 2) AS avg_tip_per_trip
+FROM ${ref("stg_taxi_trips")}
+GROUP BY taxi_id
+ORDER BY total_tips DESC
+LIMIT 100

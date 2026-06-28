@@ -1,0 +1,5 @@
+defaultProject: taxi-assessment-500503
+defaultDataset: dataform
+defaultAssertionDataset: dataform_assertions
+dataformCoreVersion: 3.0.52
+defaultLocation: US

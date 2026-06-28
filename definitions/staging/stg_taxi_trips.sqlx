@@ -1,0 +1,51 @@
+config {
+  type: "table",
+  schema: "staging",
+  description: "Filtered to 90 days window. Downstream table reference to this. Scan the main public table once.",
+  columns: {
+    unique_key: "Used for deduplication",
+    taxi_id: "Unique id",
+    trip_start_timestamp: "Rounded to nearest 15 min by source",
+    trip_end_timestamp: "Rounded to nearest 15 min by source",
+    trip_seconds: "Trip in seconds",
+    trip_miles: "Trip in miles",
+    fare: "Fare amount, excluding tips",
+    tips: "Tip amount",
+    trip_total: "Total amount charged",
+    payment_type: "Payment type",
+    company: "Taxi company",
+    pickup_community_area: "Area the trip started",
+    dropoff_community_area: "Area the trip ended"
+  }
+}
+
+SELECT
+  unique_key,
+  taxi_id,
+  trip_start_timestamp,
+  trip_end_timestamp,
+  trip_seconds,
+  trip_miles,
+  fare,
+  tips,
+  trip_total,
+  payment_type,
+  company,
+  pickup_community_area,
+  dropoff_community_area
+FROM ${ref("taxi_trips")}
+WHERE
+  taxi_id IS NOT NULL
+  AND trip_start_timestamp IS NOT NULL
+  AND trip_end_timestamp IS NOT NULL
+  AND trip_end_timestamp >= trip_start_timestamp
+  AND trip_seconds > 0
+  AND fare >= 0
+  AND tips >= 0
+  AND trip_start_timestamp >= CAST(
+  DATETIME_SUB(DATETIME(TIMESTAMP('2023-12-31 23:45:00')), INTERVAL 3 MONTH) AS TIMESTAMP)
+  AND trip_start_timestamp <= TIMESTAMP('2023-12-31 23:45:00')
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY unique_key
+    ORDER BY trip_start_timestamp
+    ) = 1

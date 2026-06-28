@@ -1,0 +1,70 @@
+config {
+  type: "table",
+  schema: "marts",
+  description: "US public holiday impact on daily taxi trip volume and revenue, with holidays, weekends, and regular weekdays compared separately.",
+  columns: {
+    day_type: "Holiday name, Weekend or Regular Weekday",
+    total_days_sampled: "Number of distinct calendar days",
+    avg_trips_per_day: "Average trip count per day",
+    avg_revenue_per_day: "Average total revenue per day"
+  }
+}
+
+WITH us_holiday_lookup AS (
+  SELECT * FROM UNNEST([
+    STRUCT(DATE('2022-01-01') AS holiday_date, 'New Year' AS holiday_name),
+    STRUCT(DATE('2022-07-04'), 'Independence Day'),
+    STRUCT(DATE('2022-11-24'), 'Thanksgiving'),
+    STRUCT(DATE('2022-12-25'), 'Christmas'),
+    STRUCT(DATE('2023-01-01'), 'New Year'),
+    STRUCT(DATE('2023-07-04'), 'Independence Day'),
+    STRUCT(DATE('2023-11-23'), 'Thanksgiving'),
+    STRUCT(DATE('2023-12-25'), 'Christmas')
+  ])
+),
+
+deduped_trips AS (
+  SELECT
+    trip_start_timestamp,
+    trip_total
+  FROM ${ref("taxi_trips")}
+  WHERE
+    taxi_id IS NOT NULL
+    AND trip_start_timestamp IS NOT NULL
+    AND trip_seconds > 0
+    AND fare >= 0
+    AND trip_start_timestamp >= TIMESTAMP('2022-01-01')
+    AND trip_start_timestamp < TIMESTAMP('2024-01-01')
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY unique_key ORDER BY trip_start_timestamp) = 1
+),
+
+daily_taxi_trips AS (
+  SELECT
+    DATE(trip_start_timestamp) AS trip_date,
+    EXTRACT(DAYOFWEEK FROM trip_start_timestamp) AS day_of_week,
+    COUNT(*) AS total_trips,
+    SUM(trip_total) AS total_revenue
+  FROM deduped_trips
+  GROUP BY 1, 2
+),
+
+classified_trips AS (
+  SELECT
+    t.*,
+    CASE
+      WHEN h.holiday_name IS NOT NULL THEN h.holiday_name
+      WHEN t.day_of_week IN (1, 7) THEN 'Weekend'
+      ELSE 'Regular Weekday'
+    END AS day_type
+  FROM daily_taxi_trips t
+  LEFT JOIN us_holiday_lookup h ON t.trip_date = h.holiday_date
+)
+
+SELECT
+  day_type,
+  COUNT(DISTINCT trip_date) AS total_days_sampled,
+  ROUND(AVG(total_trips), 0) AS avg_trips_per_day,
+  ROUND(AVG(total_revenue), 2) AS avg_revenue_per_day
+FROM classified_trips
+GROUP BY 1
+ORDER BY avg_trips_per_day DESC

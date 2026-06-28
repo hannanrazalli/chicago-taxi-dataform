@@ -1,0 +1,72 @@
+config {
+  type: "table",
+  schema: "marts",
+  description: "Top 100 overworker taxi IDs. >12h continuous driving without an 8h+ break.",
+  columns: {
+    taxi_id: "Unique id",
+    total_shifts: "Number of distinct shifts",
+    long_shifts: "Number of shifts exceeding 12 continuous hours",
+    pct_long_shifts: "long_shifts / total_shifts",
+    avg_shift_hours: "Average shift",
+    max_shift_hours: "Longest single shift",
+    total_hours_worked: "Sum of all shift durations"
+  }
+}
+
+WITH trip_gaps AS (
+  SELECT
+    taxi_id,
+    trip_start_timestamp,
+    trip_end_timestamp,
+    TIMESTAMP_DIFF(
+      trip_start_timestamp,
+      LAG(trip_end_timestamp) OVER (PARTITION BY taxi_id ORDER BY trip_start_timestamp),
+      MINUTE
+    ) AS gap_minutes
+  FROM ${ref("stg_taxi_trips")}
+),
+
+shifts AS (
+  SELECT
+    *,
+    COUNTIF(gap_minutes IS NULL OR gap_minutes >= 480) OVER (
+      PARTITION BY taxi_id ORDER BY trip_start_timestamp
+    ) AS shift_id
+  FROM trip_gaps
+),
+
+shift_summary AS (
+  SELECT
+    taxi_id,
+    shift_id,
+    MIN(trip_start_timestamp) AS shift_start,
+    MAX(trip_end_timestamp) AS shift_end,
+    TIMESTAMP_DIFF(MAX(trip_end_timestamp), MIN(trip_start_timestamp), MINUTE) / 60.0 AS shift_hours
+  FROM shifts
+  GROUP BY taxi_id, shift_id
+),
+
+driver_summary AS (
+  SELECT
+    taxi_id,
+    COUNT(*) AS total_shifts,
+    COUNTIF(shift_hours > 12) AS long_shifts,
+    ROUND(AVG(shift_hours), 2) AS avg_shift_hours,
+    ROUND(MAX(shift_hours), 2) AS max_shift_hours,
+    ROUND(SUM(shift_hours), 2) AS total_hours_worked
+  FROM shift_summary
+  GROUP BY taxi_id
+)
+
+SELECT
+  taxi_id,
+  total_shifts,
+  long_shifts,
+  ROUND(long_shifts / total_shifts * 100, 1) AS pct_long_shifts,
+  avg_shift_hours,
+  max_shift_hours,
+  total_hours_worked
+FROM driver_summary
+WHERE long_shifts >= 1
+ORDER BY long_shifts DESC, max_shift_hours DESC
+LIMIT 100

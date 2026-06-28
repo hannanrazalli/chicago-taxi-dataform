@@ -1,0 +1,18 @@
+config {
+  type: "table",
+  schema: "marts",
+  description: "Peak hour demand pattern.Identify peak hour windows for driver scheduling and incentive timing.",
+  columns: {
+    hour_of_day: "Hour of day the trip started",
+    trip_count: "Total trips that started",
+    avg_fare: "Average fare for trips"
+  }
+}
+
+SELECT
+  EXTRACT(HOUR FROM trip_start_timestamp) AS hour_of_day,
+  COUNT(*) AS trip_count,
+  ROUND(AVG(fare), 2) AS avg_fare
+FROM ${ref("stg_taxi_trips")}
+GROUP BY hour_of_day
+ORDER BY hour_of_day

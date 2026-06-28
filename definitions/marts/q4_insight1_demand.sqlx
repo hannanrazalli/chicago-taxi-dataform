@@ -1,0 +1,25 @@
+config {
+  type: "table",
+  schema: "marts",
+  description: "Spatial demand & supply gap.High ratio areas = under-served.",
+  columns: {
+    pickup_community_area: "Chicago community area code",
+    trip_count: "Total trips picked up in this area",
+    unique_drivers: "Number of distinct taxi_ids",
+    trips_per_driver: "trip_count / unique_drivers > higher means more demand",
+    avg_fare: "Average fare per trip in this area",
+    total_revenue: "Sum of trip_total trips"
+  }
+}
+
+SELECT
+  pickup_community_area,
+  COUNT(*) AS trip_count,
+  COUNT(DISTINCT taxi_id) AS unique_drivers,
+  ROUND(COUNT(*) / COUNT(DISTINCT taxi_id), 2) AS trips_per_driver,
+  ROUND(AVG(fare), 2) AS avg_fare,
+  ROUND(SUM(trip_total), 2) AS total_revenue
+FROM ${ref("stg_taxi_trips")}
+WHERE pickup_community_area IS NOT NULL
+GROUP BY pickup_community_area
+ORDER BY trips_per_driver DESC
