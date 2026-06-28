@@ -10,7 +10,7 @@ Upon receiving this assessment and profiling the bigquery-public-data.chicago_ta
 ---
 
 ## 2. Pipeline Architecture, Methodology, Assumptions & Definitions
-
+```
 taxi_trips (Raw Public Source)
 │
 ├──► staging/stg_taxi_trips (Cleaned, deduped, fixed 3-month window)
@@ -21,6 +21,7 @@ taxi_trips (Raw Public Source)
 │     └──► marts/q4_insight2_peak_hour.sqlx
 │
 └──► marts/q3_holiday_impact.sqlx (2-year window)
+```
 
 ### Staging Layer (Raw Data Refinement)
 *   **Data Integrity Rules:** Rows containing impossible physical logic such as zero or negative trip durations (trip_seconds <= 0), negative financial fields (fare < 0), or end timestamps that occur before start timestamps are treated as corrupt data and dropped.
